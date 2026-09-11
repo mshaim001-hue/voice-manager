@@ -17,6 +17,9 @@ if str(ROOT) not in sys.path:
 
 from asr import DEFAULT_WHISPER_MODEL, ASRError, transcribe
 from asr.diarize import DiarizationError, models_ready
+from ingest.turns import is_dialogue, parse_speaker_turns
+from llm.rag import answer_meeting_question, build_index
+from ui.chat import meeting_chat_html
 import export as export_mod
 
 export_mod = importlib.reload(export_mod)
@@ -83,6 +86,12 @@ def _init_state() -> None:
         "timing": None,
         "exports": None,
         "ui_lang": "ru",
+        "turns": None,
+        "rag_index": None,
+        "chat_qa": None,
+        "is_dialogue": False,
+        "diarized": False,
+        "result_view": "protocol",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -169,6 +178,19 @@ def _run_pipeline(
 
         progress.progress(100, text=t(ui, "progress_done"))
         total = time.perf_counter() - wall0
+        turns = parse_speaker_turns(transcript)
+        if not is_dialogue(turns):
+            raw_turns = parse_speaker_turns(st.session_state.transcript_raw or "")
+            if is_dialogue(raw_turns):
+                turns = raw_turns
+        st.session_state.turns = turns
+        st.session_state.is_dialogue = is_dialogue(turns)
+        st.session_state.diarized = bool(diarize_speakers) or st.session_state.is_dialogue
+        st.session_state.rag_index = build_index(transcript, payload, turns)
+        st.session_state.chat_qa = []
+        st.session_state.result_view = (
+            "chat" if st.session_state.diarized else "protocol"
+        )
         st.session_state.protocol = payload
         st.session_state.exports = exports
         st.session_state.timing = {
@@ -198,6 +220,49 @@ def _run_pipeline(
         st.session_state.error = msg
         status.error(t(ui, "status_err", e=msg))
         progress.progress(0, text=t(ui, "progress_err"))
+
+
+def _ask_meeting(question: str, *, llm_model: str, ui: str) -> None:
+    q = question.strip()
+    if not q:
+        return
+    if st.session_state.chat_qa is None:
+        st.session_state.chat_qa = []
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in st.session_state.chat_qa
+        if m.get("role") in {"user", "assistant"} and m.get("content")
+    ]
+    st.session_state.chat_qa.append({"role": "user", "content": q})
+    index = st.session_state.rag_index
+    if index is None:
+        index = build_index(
+            st.session_state.transcript,
+            st.session_state.protocol,
+            st.session_state.turns,
+        )
+        st.session_state.rag_index = index
+    try:
+        with st.spinner(t(ui, "chat_spinner")):
+            result = answer_meeting_question(
+                q,
+                index=index,
+                protocol=st.session_state.protocol,
+                history=history,
+                model=llm_model,
+                output_lang=ui,
+            )
+        st.session_state.chat_qa.append(
+            {
+                "role": "assistant",
+                "content": result["answer"],
+                "sources": result.get("sources") or [],
+            }
+        )
+    except Exception as e:
+        st.session_state.chat_qa.append(
+            {"role": "assistant", "content": str(e), "sources": []}
+        )
 
 
 def main() -> None:
@@ -290,8 +355,14 @@ def main() -> None:
                 "error",
                 "timing",
                 "exports",
+                "turns",
+                "rag_index",
+                "chat_qa",
             ):
                 st.session_state[k] = None
+            st.session_state.is_dialogue = False
+            st.session_state.diarized = False
+            st.session_state.result_view = "protocol"
             st.rerun()
 
     if run:
@@ -359,94 +430,126 @@ def main() -> None:
                 )
             )
 
-        st.markdown(f"**{t(ui, 'summary')}**")
-        for line in protocol.get("executive_summary") or []:
-            st.write(f"- {line}")
+        view = st.radio(
+            "result_view",
+            options=["protocol", "chat"],
+            format_func=lambda k: t(ui, f"view_{k}"),
+            horizontal=True,
+            label_visibility="collapsed",
+            key="result_view",
+        )
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"**{t(ui, 'decisions')}**")
-            for d in protocol.get("decisions") or []:
-                st.write(f"- {d}")
-            st.markdown(f"**{t(ui, 'topics')}**")
-            for topic in protocol.get("topics") or []:
-                st.write(f"- {topic}")
-        with c2:
-            st.markdown(f"**{t(ui, 'open_questions')}**")
-            qs = protocol.get("open_questions") or []
-            if qs:
-                for q in qs:
-                    st.write(f"- {q}")
+        if view == "chat":
+            turns = st.session_state.turns or []
+            show_turns = (
+                turns if (st.session_state.diarized or is_dialogue(turns)) else []
+            )
+            if not show_turns:
+                st.caption(t(ui, "chat_no_dialogue"))
+            qa = st.session_state.chat_qa or []
+            st.markdown(
+                meeting_chat_html(show_turns, qa, ui_lang=ui),
+                unsafe_allow_html=True,
+            )
+            if not qa:
+                st.caption(t(ui, "chat_empty"))
+            prompt = st.chat_input(t(ui, "chat_input"))
+            if prompt:
+                _ask_meeting(prompt, llm_model=llm_model, ui=ui)
+                st.rerun()
+        else:
+            st.markdown(f"**{t(ui, 'summary')}**")
+            for line in protocol.get("executive_summary") or []:
+                st.write(f"- {line}")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**{t(ui, 'decisions')}**")
+                for d in protocol.get("decisions") or []:
+                    st.write(f"- {d}")
+                st.markdown(f"**{t(ui, 'topics')}**")
+                for topic in protocol.get("topics") or []:
+                    st.write(f"- {topic}")
+            with c2:
+                st.markdown(f"**{t(ui, 'open_questions')}**")
+                qs = protocol.get("open_questions") or []
+                if qs:
+                    for q in qs:
+                        st.write(f"- {q}")
+                else:
+                    st.write(t(ui, "empty"))
+
+            st.markdown(f"**{t(ui, 'risks')}**")
+            risks = protocol.get("risks") or []
+            if risks:
+                cards = "".join(_risk_card_html(item, ui) for item in risks)
+                st.markdown(cards, unsafe_allow_html=True)
             else:
                 st.write(t(ui, "empty"))
 
-        st.markdown(f"**{t(ui, 'risks')}**")
-        risks = protocol.get("risks") or []
-        if risks:
-            cards = "".join(_risk_card_html(item, ui) for item in risks)
-            st.markdown(cards, unsafe_allow_html=True)
-        else:
-            st.write(t(ui, "empty"))
-
-        st.markdown(f"**{t(ui, 'actions')}**")
-        items = protocol.get("action_items") or []
-        if items:
-            st.dataframe(items, use_container_width=True, hide_index=True)
-        else:
-            st.write(t(ui, "empty"))
-
-        exports = st.session_state.exports or {}
-        st.markdown(f"**{t(ui, 'download')}**")
-        d1, d2, d3 = st.columns(3)
-        with d1:
-            st.download_button(
-                "JSON",
-                data=exports.get("json")
-                or json.dumps(protocol, ensure_ascii=False, indent=2).encode("utf-8"),
-                file_name="protocol.json",
-                mime="application/json",
-                use_container_width=True,
-            )
-        with d2:
-            st.download_button(
-                "CSV",
-                data=exports.get("csv") or b"",
-                file_name="protocol.csv",
-                mime="text/csv",
-                use_container_width=True,
-                disabled="csv" not in exports,
-            )
-        with d3:
-            st.download_button(
-                "PDF",
-                data=exports.get("pdf") or b"",
-                file_name="protocol.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                disabled="pdf" not in exports,
-            )
-
-        with st.expander(t(ui, "transcript"), expanded=True):
-            st.caption(t(ui, "transcript_cap"))
-            quotes = [
-                str(item.get("quote"))
-                for item in protocol.get("risks") or []
-                if item.get("quote")
-            ]
-            transcript_text = st.session_state.transcript or ""
-            if quotes:
-                st.caption(t(ui, "transcript_marks"))
-                st.markdown(
-                    highlight_quotes_html(transcript_text, quotes),
-                    unsafe_allow_html=True,
-                )
+            st.markdown(f"**{t(ui, 'actions')}**")
+            items = protocol.get("action_items") or []
+            if items:
+                st.dataframe(items, use_container_width=True, hide_index=True)
             else:
-                st.text(transcript_text)
-            raw = st.session_state.transcript_raw
-            polished = st.session_state.transcript
-            if raw and polished and raw.strip() != (polished or "").strip():
-                with st.expander(t(ui, "transcript_raw")):
-                    st.text(raw)
+                st.write(t(ui, "empty"))
+
+            exports = st.session_state.exports or {}
+            st.markdown(f"**{t(ui, 'download')}**")
+            d1, d2, d3 = st.columns(3)
+            with d1:
+                st.download_button(
+                    "JSON",
+                    data=exports.get("json")
+                    or json.dumps(protocol, ensure_ascii=False, indent=2).encode(
+                        "utf-8"
+                    ),
+                    file_name="protocol.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+            with d2:
+                st.download_button(
+                    "CSV",
+                    data=exports.get("csv") or b"",
+                    file_name="protocol.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    disabled="csv" not in exports,
+                )
+            with d3:
+                st.download_button(
+                    "PDF",
+                    data=exports.get("pdf") or b"",
+                    file_name="protocol.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    disabled="pdf" not in exports,
+                )
+
+            with st.expander(
+                t(ui, "transcript"), expanded=not st.session_state.diarized
+            ):
+                st.caption(t(ui, "transcript_cap"))
+                quotes = [
+                    str(item.get("quote"))
+                    for item in protocol.get("risks") or []
+                    if item.get("quote")
+                ]
+                transcript_text = st.session_state.transcript or ""
+                if quotes:
+                    st.caption(t(ui, "transcript_marks"))
+                    st.markdown(
+                        highlight_quotes_html(transcript_text, quotes),
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.text(transcript_text)
+                raw = st.session_state.transcript_raw
+                polished = st.session_state.transcript
+                if raw and polished and raw.strip() != (polished or "").strip():
+                    with st.expander(t(ui, "transcript_raw")):
+                        st.text(raw)
 
 
 if __name__ == "__main__":

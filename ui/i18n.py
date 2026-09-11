@@ -83,6 +83,18 @@ STRINGS: dict[str, dict[str, str]] = {
             "\n\nПодсказка: m4a/mp3 конвертируются через afconvert. "
             "Обнови страницу UI и попробуй снова; либо сохрани как WAV."
         ),
+        "view_protocol": "Протокол",
+        "view_chat": "Чат по встрече",
+        "chat_meeting_log": "Запись встречи",
+        "chat_ask_section": "Вопросы по записи",
+        "chat_input": "Спросите о встрече…",
+        "chat_send": "Спросить",
+        "chat_you": "Вы",
+        "chat_assistant": "Ассистент",
+        "chat_spinner": "Ищу в записи (локальный RAG)…",
+        "chat_empty": "Задайте вопрос по транскрипту и протоколу. Модель — только локальная Ollama.",
+        "chat_no_dialogue": "Диаризация не дала реплики спикеров — ниже обычный Q&A по тексту.",
+        "chat_need_run": "Сначала обработайте запись или вставьте транскрипт.",
     },
     "en": {
         "page_title": "Voice Manager — meeting minutes",
@@ -154,6 +166,18 @@ STRINGS: dict[str, dict[str, str]] = {
             "\n\nHint: m4a/mp3 are converted via afconvert. "
             "Refresh the UI and try again, or save as WAV."
         ),
+        "view_protocol": "Minutes",
+        "view_chat": "Meeting chat",
+        "chat_meeting_log": "Meeting recording",
+        "chat_ask_section": "Questions about the recording",
+        "chat_input": "Ask about the meeting…",
+        "chat_send": "Ask",
+        "chat_you": "You",
+        "chat_assistant": "Assistant",
+        "chat_spinner": "Searching the recording (local RAG)…",
+        "chat_empty": "Ask a question about the transcript and minutes. Local Ollama only.",
+        "chat_no_dialogue": "No speaker turns from diarization — Q&A over the text is below.",
+        "chat_need_run": "Process a recording or paste a transcript first.",
     },
     "kk": {
         "page_title": "Voice Manager — кездесу хаттамасы",
@@ -225,6 +249,18 @@ STRINGS: dict[str, dict[str, str]] = {
             "\n\nКеңес: m4a/mp3 afconvert арқылы түрленеді. "
             "UI бетін жаңартып қайта көріңіз немесе WAV сақтаңыз."
         ),
+        "view_protocol": "Хаттама",
+        "view_chat": "Кездесу чаты",
+        "chat_meeting_log": "Кездесу жазбасы",
+        "chat_ask_section": "Жазба бойынша сұрақтар",
+        "chat_input": "Кездесу туралы сұраңыз…",
+        "chat_send": "Сұрау",
+        "chat_you": "Сіз",
+        "chat_assistant": "Көмекші",
+        "chat_spinner": "Жазбадан іздеу (жергілікті RAG)…",
+        "chat_empty": "Транскрипт пен хаттама бойынша сұрақ қойыңыз. Тек жергілікті Ollama.",
+        "chat_no_dialogue": "Диаризация спикер жолдарын бермеді — төменде мәтін бойынша Q&A.",
+        "chat_need_run": "Алдымен жазбаны өңдеңіз немесе транскрипт қойыңыз.",
     },
 }
 

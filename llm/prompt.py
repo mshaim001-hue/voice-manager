@@ -141,6 +141,104 @@ def build_polish_prompt(transcript: str, output_lang: str = "ru") -> str:
     )
 
 
+def build_rag_system(output_lang: str = "ru") -> str:
+    lang = _lang_name(output_lang)
+    code = normalize_output_lang(output_lang)
+    return f"""Ты — локальный ассистент по записи встречи (RAG).
+
+Язык ответа: {lang} ({code}).
+
+Правила:
+1. Отвечай ТОЛЬКО по протоколу и фрагментам транскрипта в запросе.
+2. Ничего не выдумывай: имена, даты, решения, поручения — только если они есть в контексте.
+3. Если в контексте нет ответа — прямо скажи, что в записи этого нет.
+4. Если известно, кто говорил — назови спикера и при необходимости процитируй коротко.
+5. Будь кратким: 2–6 предложений, без markdown-заголовков.
+6. Не упоминай, что ты языковая модель, и не проси доступ в интернет.
+"""
+
+
+def build_rag_user(
+    *,
+    question: str,
+    protocol: dict | None,
+    hits: list,
+    history: list[dict[str, str]] | None,
+    output_lang: str = "ru",
+) -> str:
+    lang = _lang_name(output_lang)
+    proto_lines: list[str] = []
+    if protocol:
+        title = protocol.get("title")
+        if title:
+            proto_lines.append(f"Название: {title}")
+        for line in protocol.get("executive_summary") or []:
+            proto_lines.append(f"- {line}")
+        decisions = protocol.get("decisions") or []
+        if decisions:
+            proto_lines.append("Решения: " + "; ".join(str(x) for x in decisions))
+        questions = protocol.get("open_questions") or []
+        if questions:
+            proto_lines.append("Открытые вопросы: " + "; ".join(str(x) for x in questions))
+        for item in protocol.get("action_items") or []:
+            if not isinstance(item, dict):
+                continue
+            proto_lines.append(
+                "Поручение: "
+                + ", ".join(
+                    str(part)
+                    for part in (
+                        item.get("task"),
+                        item.get("assignee"),
+                        item.get("deadline"),
+                        item.get("speaker"),
+                    )
+                    if part
+                )
+            )
+        for item in protocol.get("risks") or []:
+            if not isinstance(item, dict):
+                continue
+            proto_lines.append(
+                "Риск: "
+                + ", ".join(
+                    str(part)
+                    for part in (
+                        item.get("kind"),
+                        item.get("description"),
+                        item.get("speaker"),
+                        item.get("quote"),
+                    )
+                    if part
+                )
+            )
+    proto_block = "\n".join(proto_lines) if proto_lines else "(нет)"
+
+    hit_lines: list[str] = []
+    for i, hit in enumerate(hits or [], start=1):
+        speaker = getattr(hit, "speaker", None)
+        text = getattr(hit, "text", None) or (hit.get("text") if isinstance(hit, dict) else str(hit))
+        prefix = f"[{i}] "
+        if speaker:
+            prefix += f"{speaker}: "
+        hit_lines.append(prefix + str(text).strip())
+    hits_block = "\n".join(hit_lines) if hit_lines else "(нет релевантных фрагментов)"
+
+    hist_lines: list[str] = []
+    for item in history or []:
+        role = "Вопрос" if item.get("role") == "user" else "Ответ"
+        hist_lines.append(f"{role}: {item.get('content', '').strip()}")
+    hist_block = "\n".join(hist_lines) if hist_lines else "(нет)"
+
+    return (
+        f"Ответь на вопрос по встрече. Язык: {lang}.\n\n"
+        f"=== ПРОТОКОЛ ===\n{proto_block}\n=== КОНЕЦ ПРОТОКОЛА ===\n\n"
+        f"=== ФРАГМЕНТЫ ЗАПИСИ ===\n{hits_block}\n=== КОНЕЦ ФРАГМЕНТОВ ===\n\n"
+        f"=== ИСТОРИЯ ЧАТА ===\n{hist_block}\n=== КОНЕЦ ИСТОРИИ ===\n\n"
+        f"Вопрос: {question.strip()}\n"
+    )
+
+
 # Back-compat aliases used by older imports / docs
 SYSTEM_PROMPT = build_system_prompt("ru")
 POLISH_SYSTEM = build_polish_system("ru")
