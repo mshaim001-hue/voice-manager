@@ -17,12 +17,11 @@ if str(ROOT) not in sys.path:
 
 from asr import DEFAULT_WHISPER_MODEL, ASRError, transcribe
 from asr.diarize import DiarizationError, models_ready
-from asr.models import whisper_ui_options
 import export as export_mod
 
 export_mod = importlib.reload(export_mod)
 export_all = export_mod.export_all
-from llm.client import CANDIDATE_MODELS, DEFAULT_MODEL, OllamaError
+from llm.client import DEFAULT_MODEL, OllamaError
 from llm.pipeline import polish_transcript, text_to_protocol
 from ui.i18n import LANG_LABELS, UI_LANGS, normalize_ui_lang, t
 
@@ -178,23 +177,11 @@ def main() -> None:
             st.rerun()
         ui = normalize_ui_lang(st.session_state.ui_lang)
 
+        llm_model = DEFAULT_MODEL
+        whisper_model = DEFAULT_WHISPER_MODEL
         st.subheader(t(ui, "sidebar_models"))
-        llm_model = st.selectbox(
-            t(ui, "llm"),
-            options=list(CANDIDATE_MODELS),
-            index=list(CANDIDATE_MODELS).index(DEFAULT_MODEL)
-            if DEFAULT_MODEL in CANDIDATE_MODELS
-            else 0,
-        )
-        whisper_options = whisper_ui_options()
-        default_whisper = DEFAULT_WHISPER_MODEL
-        if default_whisper not in whisper_options:
-            default_whisper = "small"
-        whisper_model = st.selectbox(
-            t(ui, "whisper"),
-            options=whisper_options,
-            index=whisper_options.index(default_whisper),
-            help=t(ui, "whisper_help"),
+        st.caption(
+            t(ui, "sidebar_models_fixed", llm=llm_model, whisper=whisper_model)
         )
         language = st.selectbox(
             t(ui, "audio_lang"),

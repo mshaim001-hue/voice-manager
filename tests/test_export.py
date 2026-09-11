@@ -31,6 +31,22 @@ SAMPLE = {
             "priority": "unknown",
         },
     ],
+    "risks": [
+        {
+            "kind": "disagreement",
+            "description": "Борис против релиза в пятницу",
+            "speaker": "Борис",
+            "quote": "Я против пятницы, инфра не выдержит",
+            "severity": "high",
+        },
+        {
+            "kind": "technical",
+            "description": "Пиковая нагрузка на API",
+            "speaker": None,
+            "quote": None,
+            "severity": "medium",
+        },
+    ],
 }
 
 
@@ -67,6 +83,7 @@ def test_csv_contains_full_protocol(tmp_path: Path):
     assert "Решения" in sections
     assert "Темы" in sections
     assert "Открытые вопросы" in sections
+    assert "Риски и блокеры" in sections
     assert "Поручения" in sections
 
     title_row = next(r for r in rows if r["Раздел"] == "Название")
@@ -77,6 +94,16 @@ def test_csv_contains_full_protocol(tmp_path: Path):
     assert any(r["Содержание"] == "Решение A" for r in rows if r["Раздел"] == "Решения")
     assert any(r["Содержание"] == "Тема" for r in rows if r["Раздел"] == "Темы")
     assert any(r["Содержание"] == "Вопрос?" for r in rows if r["Раздел"] == "Открытые вопросы")
+
+    risk = next(
+        r
+        for r in rows
+        if r["Раздел"] == "Риски и блокеры"
+        and "Борис против релиза" in r["Содержание"]
+    )
+    assert "несогласие" in risk["Содержание"].lower() or "disagreement" in risk["Содержание"].lower()
+    assert risk["Спикер"] == "Борис"
+    assert risk["Приоритет"] == "high"
 
     action = next(
         r

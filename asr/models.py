@@ -45,8 +45,3 @@ def resolve_whisper_model(name: str) -> str:
     if p.is_dir() and ((p / "model.bin").is_file() or any(p.glob("*.bin"))):
         return str(p.resolve())
     return key
-
-
-def whisper_ui_options() -> list[str]:
-    opts = ["tiny", "base", "small", "turbo", "large-v3", "kazakh-turbo"]
-    return opts
