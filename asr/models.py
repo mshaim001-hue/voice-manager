@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 KAZAKH_HF_DIR = ROOT / "models" / "whisper" / "_hf_src"
 
-# Aliases that should use faster-whisper "turbo" (large-v3-turbo) — fits 8GB @ int8
+# Aliases that should use faster-whisper "turbo" (large-v3-turbo)
 KAZAKH_ALIASES = {
     "kazakh-turbo",
     "kazakh-whisper-large-v3-turbo",
@@ -48,5 +48,5 @@ def resolve_whisper_model(name: str) -> str:
 
 
 def whisper_ui_options() -> list[str]:
-    opts = ["tiny", "base", "small", "turbo", "kazakh-turbo"]
+    opts = ["tiny", "base", "small", "turbo", "large-v3", "kazakh-turbo"]
     return opts

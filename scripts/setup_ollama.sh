@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 0 — Ollama + candidate models (Apple Silicon / 8GB)
+# Phase 0 — Ollama + candidate models (Apple Silicon / 24GB)
 set -euo pipefail
 
 export PATH="${HOME}/bin:${HOME}/Applications/Ollama.app/Contents/Resources:${PATH}"
@@ -8,7 +8,7 @@ if [[ -n "${MODELS_OVERRIDE:-}" ]]; then
   # shellcheck disable=SC2206
   MODELS=($MODELS_OVERRIDE)
 else
-  MODELS=(gemma3:4b qwen2.5:3b qwen3:4b)
+  MODELS=(gemma3:12b qwen3:14b qwen2.5:14b)
 fi
 
 if ! command -v ollama >/dev/null 2>&1; then
@@ -37,8 +37,8 @@ for m in "${MODELS[@]}"; do
   ollama pull "$m"
 done
 
-echo "Smoke: gemma3:4b"
-ollama run gemma3:4b "Reply with one word: ok"
+echo "Smoke: gemma3:12b"
+ollama run gemma3:12b "Reply with one word: ok"
 
-echo "OK — Phase 0 gate ready. Default model in code: gemma3:4b"
+echo "OK — Phase 0 gate ready. Default model in code: gemma3:12b"
 echo "A/B: source .venv/bin/activate && python scripts/ab_models.py"

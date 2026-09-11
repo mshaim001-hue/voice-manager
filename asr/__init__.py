@@ -23,7 +23,7 @@ from asr.models import (
 
 SUPPORTED_SUFFIXES = {".wav", ".mp3", ".m4a", ".webm", ".ogg", ".flac", ".mp4", ".aac", ".caf"}
 
-DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "turbo")
 _DEFAULT_LANG_ENV = os.environ.get("WHISPER_LANGUAGE", "auto").strip().lower()
 
 

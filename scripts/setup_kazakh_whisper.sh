@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download shyngys879/kazakh-whisper-large-v3-turbo (Transformers) for 8GB Mac.
+# Download shyngys879/kazakh-whisper-large-v3-turbo (Transformers).
 # Runtime: fp16 on Apple MPS via asr/kazakh_hf.py (alias: kazakh-turbo).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,4 +24,4 @@ PY
 du -sh "$OUT"
 ls -lah "$OUT" | head
 echo "Ready. Use: --whisper-model kazakh-turbo --language kk"
-echo "Tip: на 8GB закрой Ollama на время ASR, потом снова открой для LLM."
+echo "Tip: пайплайн последовательный — ASR, затем LLM. На 24GB оба слоя живут рядом."

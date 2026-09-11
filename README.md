@@ -2,12 +2,12 @@
 
 Локальный ИИ-протоколист совещаний: **файл/текст → JSON-протокол → экспорт**. 100% offline (Ollama + Faster-Whisper).
 
-## Стек (эта машина: Apple M3, 8 GB)
+## Стек (эта машина: Apple M4, 24 GB)
 
 | Компонент | Выбор | Почему |
 |-----------|--------|--------|
-| LLM | `gemma3:4b` (A/B: `qwen2.5:3b`, `qwen3:4b`) | JSON-схема; 7B — риск OOM на 8 GB |
-| ASR | Faster-Whisper **`small`** (fallback `base`) | RU на `base` слабый; EN ок на base |
+| LLM | `gemma3:12b` (A/B: `qwen3:14b`, `qwen2.5:14b`) | JSON + RU/KK; 12–14B свободно рядом с Whisper turbo. Опционально `gemma3:27b` (~17 GB) |
+| ASR | Faster-Whisper **`turbo`** (large-v3-turbo int8) | Существенно точнее `small`; `large-v3` — максимум качества |
 | Пайплайн | строго последовательно | Whisper → потом Ollama, не вместе |
 
 ## Быстрый старт (для коллег)
@@ -18,13 +18,13 @@ cd voice-manager
 ./setup.sh
 ```
 
-Скрипт сам: создаст `.venv`, поставит зависимости, поставит/запустит **Ollama**, скачает `gemma3:4b`, прогреет Whisper `small`, подтянет модели диаризации и откроет UI.
+Скрипт сам: создаст `.venv`, поставит зависимости, поставит/запустит **Ollama**, скачает `gemma3:12b`, прогреет Whisper `turbo`, подтянет модели диаризации и откроет UI.
 
 Полезные флаги:
 
 ```bash
 ./setup.sh --no-ui          # только установка, без Streamlit
-./setup.sh --full           # + qwen2.5:3b, qwen3:4b, Whisper turbo
+./setup.sh --full           # + qwen3:14b, qwen2.5:14b
 ./setup.sh --skip-diarize   # без моделей спикеров
 ```
 
@@ -40,7 +40,7 @@ pip install -r requirements.txt
 
 # 2) Ollama (один раз; brew на этой машине без sudo — не используем)
 # App уже можно поставить в ~/Applications — см. scripts/setup_ollama.sh
-bash scripts/setup_ollama.sh   # тянет gemma3:4b + qwen2.5:3b + qwen3:4b
+bash scripts/setup_ollama.sh   # тянет gemma3:12b + qwen3:14b + qwen2.5:14b
 
 # 3) Фаза 1 — протокол из текста
 python run.py --text samples/meeting_with_deadline.txt -o output/protocol.json
@@ -66,14 +66,14 @@ bash scripts/run_ui.sh
 
 ```bash
 python run.py --text path/to/transcript.txt -o protocol.json
-python run.py --audio samples/sample.wav -o protocol.json --whisper-model small --language ru --export-dir output/export
+python run.py --audio samples/sample.wav -o protocol.json --whisper-model turbo --language ru --export-dir output/export
 python run.py --audio samples/sample_2speakers.wav --diarize --num-speakers 2 --language ru \
-  --whisper-model small -o output/protocol_diarized.json --save-transcript output/asr_diarized.txt
+  --whisper-model turbo -o output/protocol_diarized.json --save-transcript output/asr_diarized.txt
 python scripts/export_protocol.py protocol.json -d output/export
 bash scripts/run_ui.sh
 ```
 
-Переменные: `OLLAMA_HOST`, `OLLAMA_MODEL` (default `gemma3:4b`), `WHISPER_MODEL` (default `small`), `WHISPER_LANGUAGE`, `DIARIZATION_MODELS_DIR`.
+Переменные: `OLLAMA_HOST`, `OLLAMA_MODEL` (default `gemma3:12b`), `WHISPER_MODEL` (default `turbo`), `WHISPER_LANGUAGE`, `DIARIZATION_MODELS_DIR`.
 
 ## Структура
 
@@ -89,7 +89,7 @@ samples/  # тестовые транскрипты
 
 ## Airplane-mode чеклист (демо offline)
 
-1. До демо: `ollama pull gemma3:4b` (и кандидаты) + Whisper `base` заранее.
+1. До демо: `ollama pull gemma3:12b` (и кандидаты) + Whisper `turbo` заранее.
 2. Включить **Режим полёта** (или отключить Wi‑Fi + Ethernet).
 3. Убедиться, что `ollama serve` уже запущен локально.
 4. На записи экрана: System Settings → Network = disconnected / airplane.
@@ -101,7 +101,7 @@ samples/  # тестовые транскрипты
 
 | Фаза | Гейт |
 |------|------|
-| 0 | `ollama run gemma3:4b` отвечает локально |
+| 0 | `ollama run gemma3:12b` отвечает локально |
 | 1 | 3 текста из `samples/` → валидный JSON, без выдуманных deadline/assignee |
 | 2 | `sample.wav` → protocol.json без копипаста (~2 мин аудио; замер wall time в CLI) |
 | 3 | json + csv + pdf открываются, поля совпадают (`scripts/export_protocol.py`) |

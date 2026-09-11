@@ -10,9 +10,9 @@ START_UI=1
 DO_DIARIZE=1
 DO_SMOKE=1
 FULL=0
-# Default: one LLM (enough for demo). --full also pulls A/B candidates + Whisper turbo.
-MODELS=(gemma3:4b)
-WHISPER_PRELOAD="small"
+# Default: one LLM for M4 24GB. --full also pulls A/B candidates.
+MODELS=(gemma3:12b)
+WHISPER_PRELOAD="turbo"
 
 usage() {
   cat <<'EOF'
@@ -22,11 +22,11 @@ Usage: ./setup.sh [options]
   --no-ui         Setup only, do not launch Streamlit
   --skip-diarize  Skip sherpa-onnx speaker models
   --skip-smoke    Skip quick LLM smoke test
-  --full          Also pull qwen2.5:3b + qwen3:4b and preload Whisper turbo
+  --full          Also pull qwen3:14b + qwen2.5:14b
   -h, --help      This help
 
 Env:
-  MODELS_OVERRIDE="gemma3:4b qwen3:4b"   custom Ollama pulls
+  MODELS_OVERRIDE="gemma3:12b qwen3:14b"   custom Ollama pulls
   SKIP_DIARIZE=1                         same as --skip-diarize
 EOF
 }
@@ -52,8 +52,8 @@ if [[ "${SKIP_DIARIZE:-}" == "1" ]]; then
 fi
 
 if [[ "$FULL" == "1" ]]; then
-  MODELS=(gemma3:4b qwen2.5:3b qwen3:4b)
-  WHISPER_PRELOAD="small turbo"
+  MODELS=(gemma3:12b qwen3:14b qwen2.5:14b)
+  WHISPER_PRELOAD="turbo"
 fi
 
 if [[ -n "${MODELS_OVERRIDE:-}" ]]; then
@@ -205,7 +205,7 @@ python - <<'PY'
 import os
 from faster_whisper import WhisperModel
 
-for size in os.environ.get("WHISPER_PRELOAD", "small").split():
+for size in os.environ.get("WHISPER_PRELOAD", "turbo").split():
     print(f"    loading Whisper {size} (int8/cpu)…")
     WhisperModel(size, device="cpu", compute_type="int8")
     print(f"    OK Whisper {size}")

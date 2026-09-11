@@ -10,12 +10,12 @@ from typing import Any
 import httpx
 
 DEFAULT_BASE_URL = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-# Default: gemma3:4b — best structured JSON on small models; override via OLLAMA_MODEL
-DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:4b")
+# Default: gemma3:12b — JSON + multilingual on M4 24GB; override via OLLAMA_MODEL
+DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
 CANDIDATE_MODELS = (
-    "gemma3:4b",
-    "qwen2.5:3b",
-    "qwen3:4b",
+    "gemma3:12b",
+    "qwen3:14b",
+    "qwen2.5:14b",
 )
 
 
@@ -48,7 +48,7 @@ def chat(
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
     temperature: float = 0.0,
-    timeout: float = 180.0,
+    timeout: float = 300.0,
     json_mode: bool = True,
     num_predict: int = 2048,
 ) -> str:

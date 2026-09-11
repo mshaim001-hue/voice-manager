@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 import tempfile
@@ -17,7 +18,10 @@ if str(ROOT) not in sys.path:
 from asr import DEFAULT_WHISPER_MODEL, ASRError, transcribe
 from asr.diarize import DiarizationError, models_ready
 from asr.models import whisper_ui_options
-from export import export_all
+import export as export_mod
+
+export_mod = importlib.reload(export_mod)
+export_all = export_mod.export_all
 from llm.client import CANDIDATE_MODELS, DEFAULT_MODEL, OllamaError
 from llm.pipeline import polish_transcript, text_to_protocol
 from ui.i18n import LANG_LABELS, UI_LANGS, normalize_ui_lang, t
@@ -115,7 +119,7 @@ def _run_pipeline(
 
         progress.progress(90, text=t(ui, "progress_export"))
         export_dir = ROOT / "output" / "ui_export"
-        paths = export_all(payload, export_dir, stem="protocol")
+        paths = export_all(payload, export_dir, stem="protocol", lang=ui)
         exports = {k: p.read_bytes() for k, p in paths.items()}
 
         progress.progress(100, text=t(ui, "progress_done"))
@@ -366,7 +370,7 @@ def main() -> None:
             st.download_button(
                 "CSV",
                 data=exports.get("csv") or b"",
-                file_name="action_items.csv",
+                file_name="protocol.csv",
                 mime="text/csv",
                 use_container_width=True,
                 disabled="csv" not in exports,
