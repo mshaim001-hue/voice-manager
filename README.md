@@ -1,6 +1,8 @@
 # AI Meeting Intelligence
 
-Локальный ИИ-протоколист совещаний: **файл/текст → JSON-протокол → экспорт**. 100% offline (Ollama + Faster-Whisper).
+Локальный ИИ-протоколист совещаний: **файл/текст → JSON-протокол → экспорт → чат по записи**. 100% offline (Ollama + Faster-Whisper).
+
+После обработки в UI можно спросить по встрече (RAG) и, если есть диаризация или метки спикеров, увидеть реплики пузырями как в мессенджере.
 
 ## Стек (эта машина: Apple M4, 24 GB)
 
@@ -8,6 +10,9 @@
 |-----------|--------|--------|
 | LLM | `gemma3:12b` (A/B: `qwen3:14b`, `qwen2.5:14b`) | JSON + RU/KK; 12–14B свободно рядом с Whisper turbo. Опционально `gemma3:27b` (~17 GB) |
 | ASR | Faster-Whisper **`turbo`** (large-v3-turbo int8) | Существенно точнее `small`; `large-v3` — максимум качества |
+| Диаризация | sherpa-onnx (pyannote + Titanet, ONNX) | Спикер 1/2 без Hugging Face token, offline |
+| RAG | BM25 по репликам/протоколу + та же Ollama | Без embedding-моделей и облачных API |
+| UI | Streamlit, языки `ru` / `en` / `kk` | Протокол, риски, мессенджер-чат |
 | Пайплайн | строго последовательно | Whisper → потом Ollama, не вместе |
 
 ## Быстрый старт (для коллег)
@@ -28,7 +33,26 @@ cd voice-manager
 ./setup.sh --skip-diarize   # без моделей спикеров
 ```
 
-Потом снова UI: `bash scripts/run_ui.sh`
+Потом снова UI: `bash scripts/run_ui.sh` → http://localhost:8501
+
+В UI: аудио или текст → **Обработать** → вкладки **Протокол** и **Чат по встрече**.
+
+## Что получается
+
+Протокол (`MeetingProtocol`):
+
+- выжимка, решения, темы, открытые вопросы;
+- поручения (assignee / deadline / speaker — только если явно в тексте);
+- риски и блокеры: `disagreement` | `disputed` | `technical` | `blocker` + цитата.
+
+Чат по встрече (после обработки):
+
+- вопросы только по этой записи, ответ даёт локальная `gemma3:12b`;
+- поиск фрагментов — лексический BM25 (слова + символьные 3-граммы), без FAISS/OpenAI;
+- в промпт идут top-k реплик и поля протокола; модель не должна выдумывать факты;
+- если в транскрипте есть `Спикер 1:` / `Анна:`, реплики рисуются как сообщения в мессенджере (двое — слева/справа, трое+ — групповой чат).
+
+Демо без аудио: вставьте `samples/meeting_with_risks.txt` на вкладке «Текст». Қазақша: `samples/meeting_kk.txt`.
 
 ## Ручная установка (если нужно)
 
@@ -45,7 +69,7 @@ bash scripts/setup_ollama.sh   # тянет gemma3:12b + qwen3:14b + qwen2.5:14b
 # 3) Фаза 1 — протокол из текста
 python run.py --text samples/meeting_with_deadline.txt -o output/protocol.json
 
-# A/B трёх моделей на 3 samples
+# A/B трёх моделей на samples
 python scripts/ab_models.py
 
 # 4) Фаза 2 — аудио → протокол
@@ -57,9 +81,8 @@ python run.py --audio samples/sample.wav -o output/protocol_from_audio.json \
 python scripts/export_protocol.py output/protocol_from_audio.json -d output/export
 # или сразу: python run.py --text samples/... -o output/p.json --export-dir output/export
 
-# 6) Фаза 4 — UI
+# 6) Фаза 4 — UI (протокол + чат)
 bash scripts/run_ui.sh
-# откроется http://localhost:8501
 ```
 
 ## CLI
@@ -75,16 +98,18 @@ bash scripts/run_ui.sh
 
 Переменные: `OLLAMA_HOST`, `OLLAMA_MODEL` (default `gemma3:12b`), `WHISPER_MODEL` (default `turbo`), `WHISPER_LANGUAGE`, `DIARIZATION_MODELS_DIR`.
 
+Правка транскрипта LLM включена по умолчанию (`--polish` / `--no-polish`). Язык протокола в UI совпадает с языком интерфейса.
+
 ## Структура
 
 ```
-ingest/   # загрузка текста (аудио — фаза 2)
-asr/      # Faster-Whisper
-llm/      # промпт + Ollama + 1 retry
-schema/   # Pydantic MeetingProtocol
-export/   # json/csv/pdf (фаза 3)
-ui/       # один экран (фаза 4)
-samples/  # тестовые транскрипты
+ingest/   # текст + разбор реплик спикеров (turns)
+asr/      # Faster-Whisper + sherpa-onnx diarization
+llm/      # промпт, Ollama, протокол, RAG (BM25)
+schema/   # Pydantic MeetingProtocol (в т.ч. risks)
+export/   # json/csv/pdf
+ui/       # Streamlit: протокол, риски, мессенджер-чат
+samples/  # тестовые транскрипты (в т.ч. risks, kk)
 ```
 
 ## Airplane-mode чеклист (демо offline)
@@ -94,23 +119,27 @@ samples/  # тестовые транскрипты
 3. Убедиться, что `ollama serve` уже запущен локально.
 4. На записи экрана: System Settings → Network = disconnected / airplane.
 5. Прогон: `python run.py --text samples/meeting_with_deadline.txt` → `protocol.json`.
-6. Доказательство: в Activity Monitor / `lsof` нет исходящих к внешним API; Ollama только `127.0.0.1:11434`.
-7. Запасной путь: только текст (если ASR тормозит) — тот же CLI `--text`.
+6. UI: вставить `samples/meeting_with_risks.txt` → протокол с рисками → чат «Кто был против пятницы?».
+7. Доказательство: в Activity Monitor / `lsof` нет исходящих к внешним API; Ollama только `127.0.0.1:11434`.
+8. Запасной путь: только текст (если ASR тормозит) — тот же CLI `--text` или вкладка «Текст».
 
 ## Гейты
 
 | Фаза | Гейт |
 |------|------|
 | 0 | `ollama run gemma3:12b` отвечает локально |
-| 1 | 3 текста из `samples/` → валидный JSON, без выдуманных deadline/assignee |
+| 1 | тексты из `samples/` → валидный JSON, без выдуманных deadline/assignee |
 | 2 | `sample.wav` → protocol.json без копипаста (~2 мин аудио; замер wall time в CLI) |
 | 3 | json + csv + pdf открываются, поля совпадают (`scripts/export_protocol.py`) |
 | 4 | путь в UI <1 мин кликов (`bash scripts/run_ui.sh`) |
 | 5 | `--diarize` → в транскрипте видно «Спикер 1/2» (`samples/sample_2speakers.wav`) |
+| 6 | UI-чат: вопрос по `meeting_with_risks.txt` отвечает из записи, не из интернета |
 
-## Тесты схемы (без LLM)
+## Тесты (без живой LLM, кроме ручной проверки RAG)
 
 ```bash
-pip install pytest
+source .venv/bin/activate
 pytest tests/ -q
 ```
+
+Покрыто: схема протокола, экспорт, диаризация merge, подсветка цитат рисков, разбор реплик, BM25-RAG, HTML мессенджера.
