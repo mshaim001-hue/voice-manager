@@ -1,3 +1,3 @@
-from .protocol import ActionItem, MeetingProtocol, Priority
+from .protocol import ActionItem, MeetingProtocol, Priority, RiskItem, RiskKind
 
-__all__ = ["ActionItem", "MeetingProtocol", "Priority"]
+__all__ = ["ActionItem", "MeetingProtocol", "Priority", "RiskItem", "RiskKind"]

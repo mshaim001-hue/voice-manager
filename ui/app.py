@@ -23,9 +23,55 @@ export_mod = importlib.reload(export_mod)
 export_all = export_mod.export_all
 from llm.client import DEFAULT_MODEL, OllamaError
 from llm.pipeline import polish_transcript, text_to_protocol
+from ui.highlight import highlight_quotes_html
 from ui.i18n import LANG_LABELS, UI_LANGS, normalize_ui_lang, t
 
 AUDIO_TYPES = ["wav", "mp3", "m4a", "webm", "ogg", "flac"]
+
+_RISK_STYLE = {
+    "disagreement": ("#FFF6E8", "#FFA421"),
+    "disputed": ("#F7F0FB", "#8E44AD"),
+    "technical": ("#FFF1E6", "#E67E22"),
+    "blocker": ("#FDECEC", "#E74C3C"),
+}
+
+
+def _esc(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _risk_card_html(item: dict, ui: str) -> str:
+    kind = str(item.get("kind") or "")
+    bg, accent = _RISK_STYLE.get(kind, ("#F0F2F6", "#808495"))
+    label = t(ui, f"risk_kind_{kind}") if kind else kind
+    desc = _esc(str(item.get("description") or ""))
+    speaker = item.get("speaker")
+    severity = str(item.get("severity") or "unknown")
+    quote = item.get("quote")
+    meta = " · ".join(
+        part
+        for part in (
+            _esc(label),
+            _esc(severity),
+            _esc(str(speaker)) if speaker else "",
+        )
+        if part
+    )
+    quote_html = (
+        f'<div style="margin-top:6px;font-style:italic;color:#555">«{_esc(str(quote))}»</div>'
+        if quote
+        else ""
+    )
+    return (
+        f'<div style="border-left:4px solid {accent};background:{bg};'
+        f'padding:10px 12px;border-radius:6px;margin-bottom:8px">'
+        f'<div style="font-size:12px;color:{accent};font-weight:700">{meta}</div>'
+        f'<div style="margin-top:4px">{desc}</div>{quote_html}</div>'
+    )
 
 
 def _init_state() -> None:
@@ -334,6 +380,14 @@ def main() -> None:
             else:
                 st.write(t(ui, "empty"))
 
+        st.markdown(f"**{t(ui, 'risks')}**")
+        risks = protocol.get("risks") or []
+        if risks:
+            cards = "".join(_risk_card_html(item, ui) for item in risks)
+            st.markdown(cards, unsafe_allow_html=True)
+        else:
+            st.write(t(ui, "empty"))
+
         st.markdown(f"**{t(ui, 'actions')}**")
         items = protocol.get("action_items") or []
         if items:
@@ -374,7 +428,20 @@ def main() -> None:
 
         with st.expander(t(ui, "transcript"), expanded=True):
             st.caption(t(ui, "transcript_cap"))
-            st.text(st.session_state.transcript or "")
+            quotes = [
+                str(item.get("quote"))
+                for item in protocol.get("risks") or []
+                if item.get("quote")
+            ]
+            transcript_text = st.session_state.transcript or ""
+            if quotes:
+                st.caption(t(ui, "transcript_marks"))
+                st.markdown(
+                    highlight_quotes_html(transcript_text, quotes),
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.text(transcript_text)
             raw = st.session_state.transcript_raw
             polished = st.session_state.transcript
             if raw and polished and raw.strip() != (polished or "").strip():

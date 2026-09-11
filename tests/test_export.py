@@ -140,3 +140,20 @@ def test_pdf_action_items_are_table():
     assert "пятница" in _cell_text(data[1][3])
     assert "high" in _cell_text(data[1][4])
     assert "Changelog" in _cell_text(data[2][0])
+
+
+def test_pdf_contains_risks_section():
+    story = pdf_story(SAMPLE)
+    texts = []
+    for item in story:
+        text = getattr(item, "text", None)
+        if text:
+            texts.append(str(text))
+        elif isinstance(item, Table):
+            for row in item._cellvalues:
+                for cell in row:
+                    texts.append(_cell_text(cell))
+    blob = "\n".join(texts)
+    assert "Риски и блокеры" in blob
+    assert "Борис против релиза в пятницу" in blob
+    assert "Пиковая нагрузка на API" in blob

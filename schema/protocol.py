@@ -15,6 +15,13 @@ class Priority(str, Enum):
     unknown = "unknown"
 
 
+class RiskKind(str, Enum):
+    disagreement = "disagreement"
+    disputed = "disputed"
+    technical = "technical"
+    blocker = "blocker"
+
+
 class ActionItem(BaseModel):
     task: str = Field(..., min_length=1, description="Суть поручения")
     assignee: Optional[str] = Field(
@@ -35,6 +42,50 @@ class ActionItem(BaseModel):
     )
 
     @field_validator("assignee", "deadline", "speaker", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str) and v.strip().lower() in {
+            "",
+            "null",
+            "none",
+            "n/a",
+            "-",
+            "не указан",
+            "не указано",
+        }:
+            return None
+        return v
+
+
+class RiskItem(BaseModel):
+    kind: RiskKind = Field(
+        ...,
+        description="disagreement | disputed | technical | blocker",
+    )
+    description: str = Field(..., min_length=1, description="Суть риска или блокера")
+    speaker: Optional[str] = Field(
+        default=None,
+        description="Кто озвучил несогласие/риск. null, если не ясно",
+    )
+    quote: Optional[str] = Field(
+        default=None,
+        description="Короткая цитата из транскрипта. null, если нет точной фразы",
+    )
+    severity: Priority = Field(
+        default=Priority.unknown,
+        description="Серьёзность, если следует из текста; иначе unknown",
+    )
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def normalize_kind(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip().lower()
+        return v
+
+    @field_validator("speaker", "quote", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: object) -> object:
         if v is None:
@@ -75,6 +126,10 @@ class MeetingProtocol(BaseModel):
     action_items: list[ActionItem] = Field(
         default_factory=list,
         description="Таблица поручений",
+    )
+    risks: list[RiskItem] = Field(
+        default_factory=list,
+        description="Несогласия, спорные вопросы, технические риски и блокеры",
     )
 
     @field_validator("executive_summary", mode="before")

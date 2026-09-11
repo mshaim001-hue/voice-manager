@@ -40,7 +40,7 @@ def build_system_prompt(output_lang: str = "ru") -> str:
     sp = _speaker_word(output_lang)
     return f"""Ты — локальный ИИ-протоколист совещаний. Работаешь строго по транскрипту.
 
-Язык значений в JSON (title, executive_summary, decisions, topics, open_questions, task, assignee, deadline):
+Язык значений в JSON (title, executive_summary, decisions, topics, open_questions, risks.description, risks.quote, task, assignee, deadline):
 ТОЛЬКО {lang} ({normalize_output_lang(output_lang)}).
 Если транскрипт на другом языке — переведи факты на {lang}, смысл не меняй.
 Ключи JSON — на английском, как в схеме.
@@ -54,9 +54,16 @@ def build_system_prompt(output_lang: str = "ru") -> str:
 5. executive_summary: 3–5 коротких предложений на языке {lang}.
 6. decisions: только то, о чём явно договорились.
 7. topics: смысловые блоки / тезисы.
-8. open_questions: темы без финального решения.
-9. Если в транскрипте есть метки спикеров — в action_items.speaker пиши «{sp} 1», «{sp} 2» и т.д. (или null).
-10. Ответ — ТОЛЬКО валидный JSON без markdown и без пояснений.
+8. open_questions: темы без финального решения. Это НЕ риски.
+9. risks: только явно озвученные моменты:
+   - disagreement — прямое несогласие («я против», «не согласен», конфликт позиций);
+   - disputed — спорный вопрос, стороны спорят, консенсуса нет;
+   - technical — технический риск, который кто-то подсветил (нагрузка, баги, инфра, безопасность, дедлайн инженерии);
+   - blocker — то, что блокирует прогресс («не можем релизить, пока…», зависимость, нет доступа).
+   Не выдумывай. Нейтральное обсуждение и обычные open_questions сюда не клади. Если ничего нет — [].
+10. Если в транскрипте есть метки спикеров — в action_items.speaker и risks.speaker пиши «{sp} 1», «{sp} 2» и т.д. (или null).
+11. risks.quote — короткая дословная цитата из транскрипта или null.
+12. Ответ — ТОЛЬКО валидный JSON без markdown и без пояснений.
 
 Схема JSON:
 {{
@@ -72,6 +79,15 @@ def build_system_prompt(output_lang: str = "ru") -> str:
       "speaker": "{sp} 1 / {sp} 2 / null",
       "deadline": "string или null",
       "priority": "high" | "medium" | "low" | "unknown"
+    }}
+  ],
+  "risks": [
+    {{
+      "kind": "disagreement" | "disputed" | "technical" | "blocker",
+      "description": "string",
+      "speaker": "{sp} 1 / имя / null",
+      "quote": "короткая цитата или null",
+      "severity": "high" | "medium" | "low" | "unknown"
     }}
   ]
 }}

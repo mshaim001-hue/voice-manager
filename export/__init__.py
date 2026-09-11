@@ -38,6 +38,12 @@ _PRIORITY_COLOR = {
     "low": "#09AB3B",
     "unknown": "#808495",
 }
+_RISK_KIND_COLOR = {
+    "disagreement": "#FFA421",
+    "disputed": "#8E44AD",
+    "technical": "#E67E22",
+    "blocker": "#E74C3C",
+}
 
 LABELS: dict[str, dict[str, str]] = {
     "ru": {
@@ -55,6 +61,12 @@ LABELS: dict[str, dict[str, str]] = {
         "topics": "Темы",
         "open_questions": "Открытые вопросы",
         "actions": "Поручения",
+        "risks": "Риски и блокеры",
+        "risk_kind": "Тип",
+        "risk_disagreement": "Несогласие",
+        "risk_disputed": "Спорный вопрос",
+        "risk_technical": "Технический риск",
+        "risk_blocker": "Блокер",
         "empty": "—",
     },
     "en": {
@@ -72,6 +84,12 @@ LABELS: dict[str, dict[str, str]] = {
         "topics": "Topics",
         "open_questions": "Open questions",
         "actions": "Action items",
+        "risks": "Risks and blockers",
+        "risk_kind": "Type",
+        "risk_disagreement": "Disagreement",
+        "risk_disputed": "Disputed",
+        "risk_technical": "Technical risk",
+        "risk_blocker": "Blocker",
         "empty": "—",
     },
     "kk": {
@@ -89,6 +107,12 @@ LABELS: dict[str, dict[str, str]] = {
         "topics": "Тақырыптар",
         "open_questions": "Ашық сұрақтар",
         "actions": "Тапсырмалар",
+        "risks": "Тәуекелдер мен бөгеттер",
+        "risk_kind": "Түрі",
+        "risk_disagreement": "Келіспеушілік",
+        "risk_disputed": "Даулы мәселе",
+        "risk_technical": "Техникалық тәуекел",
+        "risk_blocker": "Бөгет",
         "empty": "—",
     },
 }
@@ -97,6 +121,10 @@ LABELS: dict[str, dict[str, str]] = {
 def _labels(lang: str | None) -> dict[str, str]:
     code = (lang or "ru").lower().strip()
     return LABELS.get(code, LABELS["ru"])
+
+
+def _risk_kind_label(kind: str, labels: dict[str, str]) -> str:
+    return labels.get(f"risk_{kind}", kind)
 
 
 def export_json(protocol: dict[str, Any], path: Path) -> Path:
@@ -142,6 +170,21 @@ def _csv_rows(protocol: dict[str, Any], labels: dict[str, str]) -> list[dict[str
     lines("decisions", list(protocol.get("decisions") or []))
     lines("topics", list(protocol.get("topics") or []))
     lines("open_questions", list(protocol.get("open_questions") or []))
+
+    risks = protocol.get("risks") or []
+    if not risks:
+        add(labels["risks"], labels["empty"])
+    else:
+        for item in risks:
+            kind = str(item.get("kind") or "")
+            kind_label = _risk_kind_label(kind, labels)
+            description = str(item.get("description") or "")
+            add(
+                labels["risks"],
+                f"{kind_label}: {description}".strip(),
+                speaker="" if item.get("speaker") is None else str(item.get("speaker")),
+                priority=str(item.get("severity") or ""),
+            )
 
     actions = protocol.get("action_items") or []
     if not actions:
@@ -358,6 +401,68 @@ def pdf_story(protocol: dict[str, Any], *, lang: str = "ru") -> list[Any]:
         )
     )
     story.append(columns)
+    story.append(Spacer(1, 7 * mm))
+
+    story.append(P(labels["risks"], h_style))
+    risks = protocol.get("risks") or []
+    if not risks:
+        story.append(P(labels["empty"], body))
+    else:
+        risk_header = [
+            Paragraph(_esc(labels["risk_kind"]), cell_header),
+            Paragraph(_esc(labels["content"]), cell_header),
+            Paragraph(_esc(labels["speaker"]), cell_header),
+            Paragraph(_esc(labels["priority"]), cell_header),
+        ]
+        risk_data: list[list[Any]] = [risk_header]
+        for item in risks:
+            kind = str(item.get("kind") or "")
+            kind_hex = _RISK_KIND_COLOR.get(kind, _UI["muted"])
+            kind_label = _risk_kind_label(kind, labels)
+            desc = str(item.get("description") or "")
+            quote = item.get("quote")
+            if quote:
+                desc_html = (
+                    f"{_esc(desc)}<br/>"
+                    f'<font color="{_UI["muted"]}" size="8">«{_esc(str(quote))}»</font>'
+                )
+            else:
+                desc_html = _esc(desc)
+            sev = str(item.get("severity") or "unknown")
+            sev_hex = _PRIORITY_COLOR.get(sev, _UI["muted"])
+            risk_data.append(
+                [
+                    Paragraph(f'<font color="{kind_hex}">{_esc(kind_label)}</font>', cell),
+                    Paragraph(desc_html, cell),
+                    Paragraph(_esc(str(item.get("speaker") or labels["empty"])), cell),
+                    Paragraph(f'<font color="{sev_hex}">{_esc(sev)}</font>', cell),
+                ]
+            )
+        risk_table = Table(
+            risk_data,
+            colWidths=[36 * mm, 90 * mm, 28 * mm, 24 * mm],
+            repeatRows=1,
+        )
+        risk_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), secondary),
+                    ("TEXTCOLOR", (0, 0), (-1, -1), text_color),
+                    ("FONTNAME", (0, 0), (-1, 0), font_bold),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, row_alt]),
+                    ("GRID", (0, 0), (-1, -1), 0.4, border),
+                    ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E74C3C")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.8, colors.HexColor("#E74C3C")),
+                ]
+            )
+        )
+        story.append(risk_table)
     story.append(Spacer(1, 7 * mm))
 
     story.append(P(labels["actions"], h_style))

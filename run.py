@@ -170,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         f"total={total:.1f}s | "
         f"summary={len(protocol.executive_summary)} "
         f"decisions={len(protocol.decisions)} "
+        f"risks={len(protocol.risks)} "
         f"actions={len(protocol.action_items)}"
     )
     return 0
